@@ -32,7 +32,7 @@ public class EmailService : IEmailService
                 From = new MailAddress(_settings.SenderEmail, _settings.SenderName),
                 Subject = subject,
                 Body = body,
-                IsBodyHtml = true
+                IsBodyHtml = true,
             };
             message.To.Add(to);
 
@@ -45,7 +45,7 @@ public class EmailService : IEmailService
         }
     }
 
-    public async Task SendLowStockAlertAsync(string to, string productName, int stockQuantity, CancellationToken cancellationToken = default)
+    public async Task SendLowStockAlertAsync(string to, string productName, int stockQuantity, byte[]? pdfAttachment = null, CancellationToken cancellationToken = default)
     {
         var subject = $"⚠️ Alerta: Stock bajo - {productName}";
         var body = $@"
@@ -59,12 +59,43 @@ public class EmailService : IEmailService
                         <p><strong>Stock actual:</strong> {stockQuantity} unidades</p>
                     </div>
                     <p>Por favor, revise el inventario y realice el reabastecimiento necesario.</p>
+                    <p style='color: #666; font-size: 13px;'>📎 Se adjunta el reporte del producto con stock bajo.</p>
                     <hr style='border: none; border-top: 1px solid #eee; margin: 20px 0;'>
                     <p style='color: #888; font-size: 12px;'>Sistema de Gestión de Inventarios - Touch Consulting</p>
                 </div>
             </body>
             </html>";
 
-        await SendEmailAsync(to, subject, body, cancellationToken);
+        try
+        {
+            using var client = new SmtpClient(_settings.SmtpServer, _settings.SmtpPort)
+            {
+                Credentials = new NetworkCredential(_settings.Username, _settings.Password),
+                EnableSsl = _settings.EnableSsl
+            };
+
+            var message = new MailMessage
+            {
+                From = new MailAddress(_settings.SenderEmail, _settings.SenderName),
+                Subject = subject,
+                Body = body,
+                IsBodyHtml = true,
+            };
+            message.To.Add(to);
+
+            if (pdfAttachment != null && pdfAttachment.Length > 0)
+            {
+                var stream = new MemoryStream(pdfAttachment);
+                var attachment = new Attachment(stream, $"Alerta_Stock_Bajo_{productName.Replace(" ", "_")}_{DateTime.Now:yyyyMMdd}.pdf", "application/pdf");
+                message.Attachments.Add(attachment);
+            }
+
+            await client.SendMailAsync(message, cancellationToken);
+            _logger.LogInformation("Email de alerta de stock bajo enviado a {To} con adjunto PDF", to);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error enviando email de alerta a {To}", to);
+        }
     }
 }

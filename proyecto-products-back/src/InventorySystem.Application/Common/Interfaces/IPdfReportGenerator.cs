@@ -6,4 +6,5 @@ public interface IPdfReportGenerator
 {
     byte[] GenerateLowStockReport(IEnumerable<Product> products, string generatedBy);
     byte[] GenerateInventoryReport(IEnumerable<Product> products, string generatedBy);
+    byte[] GenerateSingleProductLowStockReport(Product product);
 }

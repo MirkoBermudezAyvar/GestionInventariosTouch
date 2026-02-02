@@ -10,21 +10,23 @@ public class NotificationService : INotificationService
     private readonly IUnitOfWork _unitOfWork;
     private readonly IEmailService _emailService;
     private readonly ILogger<NotificationService> _logger;
+    private readonly IPdfReportGenerator _pdfReportGenerator;
 
-    public NotificationService(IUnitOfWork unitOfWork, IEmailService emailService, ILogger<NotificationService> logger)
+    public NotificationService(IUnitOfWork unitOfWork, IEmailService emailService, ILogger<NotificationService> logger, IPdfReportGenerator pdfReportGenerator)
     {
         _unitOfWork = unitOfWork;
         _emailService = emailService;
         _logger = logger;
+        _pdfReportGenerator = pdfReportGenerator;
     }
 
     public async Task NotifyLowStockAsync(Product product, CancellationToken cancellationToken = default)
     {
         var administrators = await _unitOfWork.Users.GetAdministratorsAsync(cancellationToken);
+        var pdfAttachment = _pdfReportGenerator.GenerateSingleProductLowStockReport(product);
 
         foreach (var admin in administrators)
         {
-            // Crear notificación en BD
             var notification = new Notification
             {
                 UserId = admin.Id,
@@ -32,15 +34,14 @@ public class NotificationService : INotificationService
                 Message = $"El producto '{product.Name}' tiene stock bajo. Cantidad actual: {product.StockQuantity} unidades.",
                 Type = "LowStock",
                 RelatedEntityId = product.Id,
-                RelatedEntityType = "Product"
+                RelatedEntityType = "Product",
+                adjunto = pdfAttachment
             };
 
             await _unitOfWork.Notifications.AddAsync(notification, cancellationToken);
-            
-            // Enviar email
-            await _emailService.SendLowStockAlertAsync(admin.Email, product.Name, product.StockQuantity, cancellationToken);
-            
-            _logger.LogInformation("Stock bajo notificado: {ProductId} -> Admin {AdminEmail}", product.Id, admin.Email);
+            await _emailService.SendLowStockAlertAsync(admin.Email, product.Name, product.StockQuantity, pdfAttachment, cancellationToken);
+
+            _logger.LogInformation("Stock bajo notificado con PDF adjunto: {ProductId} -> Admin {AdminEmail}", product.Id, admin.Email);
         }
     }
 
