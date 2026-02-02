@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:7.0
+    container_name: inventory-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    environment:
+      - MONGO_INITDB_DATABASE=InventorySystemDb
+    networks:
+      - inventory-network
+
+  api:
+    build:
+      context: .
+      dockerfile: src/InventorySystem.API/Dockerfile
+    container_name: inventory-api
+    restart: unless-stopped
+    ports:
+      - "5000:8080"
+    depends_on:
+      - mongodb
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - MongoDbSettings__ConnectionString=mongodb://mongodb:27017
+      - MongoDbSettings__DatabaseName=InventorySystemDb
+    networks:
+      - inventory-network
+
+  frontend:
+    build:
+      context: ../proyect-products-front
+      dockerfile: Dockerfile
+    container_name: inventory-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - api
+    networks:
+      - inventory-network
+
+volumes:
+  mongodb_data:
+
+networks:
+  inventory-network:
+    driver: bridge
